@@ -10,7 +10,7 @@
     "changeset:release": "npm run build && changeset publish",
     "version": "changeset version && node scripts/postversion.mjs",
     "build": "npm --prefix libs/moqtail-ts run build && npm --prefix apps/client-js run build",
-    "test": "npm --prefix libs/moqtail-ts run test -- run",
+    "test": "npm --prefix libs/moqtail-ts run test -- run && npm --prefix apps/client-js run test",
     "format": "npm --prefix libs/moqtail-ts run format && npm --prefix apps/client-js run format"
   },
   "devDependencies": {

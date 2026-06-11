@@ -18,7 +18,9 @@ import { useState, useRef, useEffect } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { cn } from '@/lib/utils';
 import type { Track, Status, Presets } from '@/types';
+import type { AbrDecision } from '@/lib/abr';
 import presets from '@/presets.json';
+import { AbrPanel } from './AbrPanel';
 
 const inputCls =
   'w-full rounded-lg bg-neutral-900 border border-neutral-700/80 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
@@ -292,6 +294,7 @@ function TrackGroup({
   selectedAudio,
   disabled,
   onChange,
+  badge,
 }: {
   title: string;
   color: string;
@@ -300,6 +303,7 @@ function TrackGroup({
   selectedAudio: string | null;
   disabled: boolean;
   onChange: (track: Track, checked: boolean) => void;
+  badge?: string;
 }) {
   if (tracks.length === 0) return null;
   return (
@@ -310,6 +314,11 @@ function TrackGroup({
           {title}
         </span>
         <span className="text-[10px] text-neutral-600">({tracks.length})</span>
+        {badge ? (
+          <span className="ml-auto text-[10px] font-medium tracking-wider text-emerald-300">
+            {badge}
+          </span>
+        ) : null}
       </div>
       <div className="space-y-0.5">
         {tracks.map(track => {
@@ -341,6 +350,12 @@ export function Sidebar({
   onConnect,
   onTrackChange,
   error,
+  abrEnabled = false,
+  abrAlgo = null,
+  abrLastDecision = null,
+  abrHistory = [],
+  abrMonitorActive = false,
+  onAbrReset,
 }: {
   relayUrl: string;
   onRelayUrlChange: (url: string) => void;
@@ -353,6 +368,12 @@ export function Sidebar({
   onConnect: () => void;
   onTrackChange: (track: Track, checked: boolean) => void;
   error: string | null;
+  abrEnabled?: boolean;
+  abrAlgo?: 'pf' | 'th' | 'bola' | 'mcts' | null;
+  abrLastDecision?: AbrDecision | null;
+  abrHistory?: AbrDecision[];
+  abrMonitorActive?: boolean;
+  onAbrReset?: () => void;
 }) {
   const isBusy = status === 'connecting' || status === 'restarting';
   const hasTracks = tracks.length > 0;
@@ -425,8 +446,21 @@ export function Sidebar({
             tracks={videoTracks}
             selectedVideo={selectedVideo}
             selectedAudio={selectedAudio}
-            disabled={isBusy}
+            disabled={isBusy || abrEnabled}
             onChange={onTrackChange}
+            badge={
+              abrEnabled
+                ? `ABR: ON (${
+                    abrAlgo === 'th'
+                      ? 'Throughput'
+                      : abrAlgo === 'bola'
+                        ? 'BOLA'
+                        : abrAlgo === 'mcts'
+                          ? 'MCTS'
+                          : 'PF'
+                  })`
+                : undefined
+            }
           />
           <TrackGroup
             title="Audio"
@@ -438,6 +472,16 @@ export function Sidebar({
             onChange={onTrackChange}
           />
         </div>
+      )}
+
+      {abrEnabled && (
+        <AbrPanel
+          algo={abrAlgo}
+          lastDecision={abrLastDecision}
+          history={abrHistory}
+          monitorActive={abrMonitorActive}
+          onReset={onAbrReset}
+        />
       )}
     </aside>
   );

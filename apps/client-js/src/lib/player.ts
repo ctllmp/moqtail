@@ -27,6 +27,7 @@ import {
 import { MOQtailClient } from 'moqtail/client';
 import { CMSFCatalog, RequestError } from 'moqtail/model';
 import { Logger, logger } from '@/lib/logger';
+import type { ObjectMeasurement } from '@/lib/abr';
 
 interface MOQStreamStruct {
   trackName: string;
@@ -64,6 +65,11 @@ const DefaultOptions: Required<PlayerOptions> = {
 export class Player {
   catalog: CMSFCatalog | null = null;
   client: MOQtailClient | null = null;
+
+  /** Fired (best-effort) once per non-EOG object that arrives. ABR hook. */
+  onObjectMeasured?: (m: ObjectMeasurement) => void;
+  /** Fired (best-effort) on every end-of-group sentinel. ABR hook. */
+  onEndOfGroup?: (trackName: string, groupId: bigint) => void;
 
   #element: HTMLVideoElement | null = null;
   #mse?: MediaSource;
@@ -123,6 +129,13 @@ export class Player {
     this.#element = null;
     this.#mse = undefined;
     this.#streams = [];
+  }
+
+  /** Seconds of buffered media ahead of the current playback head. 0 if no element/buffer. */
+  getBufferedSeconds(): number {
+    const el = this.#element;
+    if (!el || el.buffered.length === 0) return 0;
+    return Math.max(0, el.buffered.end(el.buffered.length - 1) - el.currentTime);
   }
 
   async attachMedia(element: HTMLVideoElement) {
@@ -260,7 +273,24 @@ export class Player {
                 'player',
                 `[${struct.trackName}] end-of-group (group=${object.groupId}, obj=${object.objectId})`,
               );
+              try {
+                this.onEndOfGroup?.(struct.trackName, object.groupId);
+              } catch (err) {
+                logger.warn('player', `onEndOfGroup hook threw: ${(err as Error).message}`);
+              }
               return;
+            }
+
+            try {
+              this.onObjectMeasured?.({
+                trackName: struct.trackName,
+                groupId: object.groupId,
+                objectId: object.objectId,
+                sizeBytes: object.payload?.byteLength ?? 0,
+                arrivalTimeMs: performance.now(),
+              });
+            } catch (err) {
+              logger.warn('player', `onObjectMeasured hook threw: ${(err as Error).message}`);
             }
 
             objectCount++;
